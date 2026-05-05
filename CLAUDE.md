@@ -51,9 +51,17 @@ Status can be overridden manually via the edit form.
 
 ### Storage abstraction (`window.storage`)
 
-The app uses an async `window.storage` API (`window.storage.get(key)` → `{value}`, `window.storage.set(key, value)`) instead of `localStorage` directly. This API is **not** provided by browsers natively — it was designed for a platform that injects this shim (e.g. Replit). In a standard browser environment the `try/catch` blocks fall back to initial data, meaning **persistence does not work in production as-is**. If implementing real persistence, replace the three `window.storage` calls in `salvar`, `salvarChecks`, and `salvarMensagem` with `localStorage`.
+The app uses an async `window.storage` API instead of `localStorage` directly. This API is **not** provided by browsers natively — it was designed for a platform that injects this shim (e.g. Replit). In a standard browser environment the `try/catch` blocks fall back to initial data, meaning **persistence does not work in production as-is**.
+
+There are 7 call sites across `src/App.jsx`:
+- **3 reads** (`window.storage.get(key)`) inside `carregar` (the `useEffect` loader) — returns a promise resolving to `{value: string}`; the actual data is read via `.value`
+- **4 writes** (`window.storage.set(key, value)`) — one in `carregar` (initial seed), and one each in `salvar`, `salvarChecks`, and `salvarMensagem`
 
 The three storage keys are: `'dados'` (supplier list), `'checks'` (checklist items), `'mensagem'` (WhatsApp template).
+
+To migrate to `localStorage`, note the API differences:
+- `window.storage.get(key)` is **async**, returns `{value: string}` — replace with synchronous `localStorage.getItem(key)` which returns the string directly (drop the `await` and change `result.value` to just `result`)
+- `window.storage.set(key, val)` is **async** — replace with synchronous `localStorage.setItem(key, val)` (drop the `await`; the `carregar` function can then be simplified or made synchronous)
 
 ## Deployment
 
