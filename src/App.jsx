@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Check, X, Plus, Phone, MapPin, Trash2, Edit2, Save, Search, Download, MessageCircle, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { Plus, Phone, MapPin, Trash2, Edit2, Save, Search, Download, MessageCircle, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+
+const LIMIAR_VERIFICADO = 0.6;
 
 const fornecedoresIniciais = [
   { id: 1, nome: 'Perfumeria Bolivia Shop / Bolivia Shop', contato: '+591 67660440', avaliacao: 'N/D', endereco: 'Calle Santa Cruz 56, Cobija', tipo: 'Perfumaria / importados', atacado: 'Indício médio', prioridade: 'Alta', obs: 'Um dos melhores leads. Indícios de perfumes importados e WhatsApp.', checks: {}, status: 'pendente', notas: '' },
@@ -40,10 +42,25 @@ Me puede enviar:
 Gracias.`;
 
 export default function App() {
-  const [fornecedores, setFornecedores] = useState([]);
-  const [checkItems, setCheckItems] = useState(checksPadrao);
-  const [mensagemWA, setMensagemWA] = useState(mensagemPadrao);
-  const [loading, setLoading] = useState(true);
+  // Inicialização síncrona via lazy useState — sem useEffect, sem loading state
+  const [fornecedores, setFornecedores] = useState(() => {
+    try {
+      const dados = localStorage.getItem('dados');
+      if (!dados) localStorage.setItem('dados', JSON.stringify(fornecedoresIniciais));
+      return dados ? JSON.parse(dados) : fornecedoresIniciais;
+    } catch { return fornecedoresIniciais; }
+  });
+  const [checkItems, setCheckItems] = useState(() => {
+    try {
+      const checks = localStorage.getItem('checks');
+      return checks ? JSON.parse(checks) : checksPadrao;
+    } catch { return checksPadrao; }
+  });
+  const [mensagemWA, setMensagemWA] = useState(() => {
+    try { return localStorage.getItem('mensagem') || mensagemPadrao; }
+    catch { return mensagemPadrao; }
+  });
+
   const [busca, setBusca] = useState('');
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas');
   const [filtroStatus, setFiltroStatus] = useState('todos');
@@ -57,45 +74,48 @@ export default function App() {
   const [mensagemCopiada, setMensagemCopiada] = useState(false);
   const [novoForn, setNovoForn] = useState({ nome: '', contato: '', endereco: '', tipo: '', atacado: 'Baixo', prioridade: 'Média', obs: '' });
   const [editForm, setEditForm] = useState({});
+  const [erroSalvar, setErroSalvar] = useState(null);
+  const [confirmarRemocao, setConfirmarRemocao] = useState(null);
 
-  useEffect(() => {
-    const carregar = async () => {
-      try {
-        const dados = await window.storage.get('dados');
-        const checks = await window.storage.get('checks');
-        const msg = await window.storage.get('mensagem');
-        if (dados && dados.value) setFornecedores(JSON.parse(dados.value));
-        else { setFornecedores(fornecedoresIniciais); await window.storage.set('dados', JSON.stringify(fornecedoresIniciais)); }
-        if (checks && checks.value) setCheckItems(JSON.parse(checks.value));
-        if (msg && msg.value) setMensagemWA(msg.value);
-      } catch (e) { setFornecedores(fornecedoresIniciais); }
-      setLoading(false);
-    };
-    carregar();
+  const debounceNotas = useRef(null);
+  const debounceLabel = useRef(null);
+  const debounceMsg = useRef(null);
+  const erroTimer = useRef(null);
+
+  const mostrarErro = useCallback((msg) => {
+    setErroSalvar(msg);
+    clearTimeout(erroTimer.current);
+    erroTimer.current = setTimeout(() => setErroSalvar(null), 4000);
   }, []);
 
-  const salvar = async (novosDados) => {
+  const salvar = useCallback((novosDados) => {
     setFornecedores(novosDados);
-    try { await window.storage.set('dados', JSON.stringify(novosDados)); } catch (e) { console.error(e); }
-  };
+    try { localStorage.setItem('dados', JSON.stringify(novosDados)); }
+    catch (e) { console.error(e); mostrarErro('Erro ao salvar. Armazenamento indisponível.'); }
+  }, [mostrarErro]);
 
-  const salvarChecks = async (novos) => {
+  const salvarChecks = useCallback((novos) => {
     setCheckItems(novos);
-    try { await window.storage.set('checks', JSON.stringify(novos)); } catch (e) { console.error(e); }
-  };
+    try { localStorage.setItem('checks', JSON.stringify(novos)); }
+    catch (e) { console.error(e); mostrarErro('Erro ao salvar checklist.'); }
+  }, [mostrarErro]);
 
-  const salvarMensagem = async (msg) => {
+  const salvarMensagem = useCallback((msg) => {
     setMensagemWA(msg);
-    try { await window.storage.set('mensagem', msg); } catch (e) { console.error(e); }
-  };
+    clearTimeout(debounceMsg.current);
+    debounceMsg.current = setTimeout(() => {
+      try { localStorage.setItem('mensagem', msg); }
+      catch (e) { console.error(e); mostrarErro('Erro ao salvar mensagem.'); }
+    }, 400);
+  }, [mostrarErro]);
 
-  const calcStatus = (checks) => {
+  const calcStatus = useCallback((checks) => {
     const total = Object.values(checks).filter(Boolean).length;
     if (checks.comprou) return 'aprovado';
-    if (total >= Math.ceil(checkItems.length * 0.6)) return 'verificado';
+    if (total >= Math.ceil(checkItems.length * LIMIAR_VERIFICADO)) return 'verificado';
     if (total >= 1) return 'em_andamento';
     return 'pendente';
-  };
+  }, [checkItems]);
 
   const toggleCheck = (id, key) => {
     const novos = fornecedores.map(f => {
@@ -110,14 +130,14 @@ export default function App() {
 
   const adicionar = () => {
     if (!novoForn.nome.trim()) return;
-    const novo = { id: Date.now(), ...novoForn, avaliacao: 'N/D', checks: {}, status: 'pendente', notas: '' };
+    const novo = { id: crypto.randomUUID(), ...novoForn, avaliacao: 'N/D', checks: {}, status: 'pendente', notas: '' };
     salvar([...fornecedores, novo]);
     setNovoForn({ nome: '', contato: '', endereco: '', tipo: '', atacado: 'Baixo', prioridade: 'Média', obs: '' });
     setShowForm(false);
   };
 
   const remover = (id) => {
-    if (confirm('Remover este fornecedor?')) salvar(fornecedores.filter(f => f.id !== id));
+    setConfirmarRemocao({ tipo: 'fornecedor', id, mensagem: 'Remover este fornecedor?' });
   };
 
   const iniciarEdicao = (f) => {
@@ -140,24 +160,43 @@ export default function App() {
 
   const atualizarNotas = (id, notas) => {
     const novos = fornecedores.map(f => f.id === id ? { ...f, notas } : f);
-    salvar(novos);
+    setFornecedores(novos);
+    clearTimeout(debounceNotas.current);
+    debounceNotas.current = setTimeout(() => {
+      try { localStorage.setItem('dados', JSON.stringify(novos)); }
+      catch (e) { console.error(e); mostrarErro('Erro ao salvar notas.'); }
+    }, 400);
   };
 
   const adicionarCheck = () => {
     if (!novoCheck.trim()) return;
-    const id = 'custom_' + Date.now();
+    const id = 'custom_' + crypto.randomUUID();
     salvarChecks([...checkItems, { id, label: novoCheck }]);
     setNovoCheck('');
   };
 
   const editarCheckLabel = (id, novoLabel) => {
-    salvarChecks(checkItems.map(c => c.id === id ? { ...c, label: novoLabel } : c));
+    const novos = checkItems.map(c => c.id === id ? { ...c, label: novoLabel } : c);
+    setCheckItems(novos);
+    clearTimeout(debounceLabel.current);
+    debounceLabel.current = setTimeout(() => {
+      try { localStorage.setItem('checks', JSON.stringify(novos)); }
+      catch (e) { console.error(e); mostrarErro('Erro ao salvar checklist.'); }
+    }, 400);
   };
 
   const removerCheck = (id) => {
-    if (confirm('Remover este item de verificação? Os marcadores existentes serão removidos.')) {
-      salvarChecks(checkItems.filter(c => c.id !== id));
+    setConfirmarRemocao({ tipo: 'check', id, mensagem: 'Remover este item de verificação? Os marcadores existentes serão removidos.' });
+  };
+
+  const confirmarRemocaoExecutar = () => {
+    if (!confirmarRemocao) return;
+    if (confirmarRemocao.tipo === 'fornecedor') {
+      salvar(fornecedores.filter(f => f.id !== confirmarRemocao.id));
+    } else {
+      salvarChecks(checkItems.filter(c => c.id !== confirmarRemocao.id));
     }
+    setConfirmarRemocao(null);
   };
 
   const exportarJSON = () => {
@@ -167,7 +206,7 @@ export default function App() {
     a.href = url;
     a.download = `fornecedores-cobija-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const copiarMensagem = () => {
@@ -186,29 +225,48 @@ export default function App() {
     window.open(`https://www.google.com/maps/search/${encodeURIComponent(endereco + ' Cobija Bolivia')}`, '_blank');
   };
 
-  const filtrados = fornecedores.filter(f => {
-    const matchBusca = f.nome.toLowerCase().includes(busca.toLowerCase()) || (f.tipo || '').toLowerCase().includes(busca.toLowerCase()) || (f.endereco || '').toLowerCase().includes(busca.toLowerCase());
-    const matchPri = filtroPrioridade === 'todas' || f.prioridade === filtroPrioridade;
-    const matchStatus = filtroStatus === 'todos' || f.status === filtroStatus;
-    return matchBusca && matchPri && matchStatus;
-  });
+  const filtrados = useMemo(
+    () => fornecedores.filter(f => {
+      const matchBusca = f.nome.toLowerCase().includes(busca.toLowerCase()) ||
+        (f.tipo || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (f.endereco || '').toLowerCase().includes(busca.toLowerCase());
+      const matchPri = filtroPrioridade === 'todas' || f.prioridade === filtroPrioridade;
+      const matchStatus = filtroStatus === 'todos' || f.status === filtroStatus;
+      return matchBusca && matchPri && matchStatus;
+    }),
+    [fornecedores, busca, filtroPrioridade, filtroStatus]
+  );
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: fornecedores.length,
     aprovados: fornecedores.filter(f => f.status === 'aprovado').length,
     verificados: fornecedores.filter(f => f.status === 'verificado').length,
     emAndamento: fornecedores.filter(f => f.status === 'em_andamento').length,
-    pendentes: fornecedores.filter(f => f.status === 'pendente').length
-  };
+    pendentes: fornecedores.filter(f => f.status === 'pendente').length,
+  }), [fornecedores]);
 
   const corPrioridade = (p) => p === 'Alta' ? 'bg-red-100 text-red-700 border-red-200' : p === 'Média' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-gray-100 text-gray-700 border-gray-200';
   const corStatus = (s) => s === 'aprovado' ? 'bg-green-500 text-white' : s === 'verificado' ? 'bg-blue-500 text-white' : s === 'em_andamento' ? 'bg-yellow-500 text-white' : 'bg-gray-300 text-gray-700';
   const labelStatus = (s) => ({ aprovado: '✓ Aprovado', verificado: 'Verificado', em_andamento: 'Em andamento', pendente: 'Pendente' }[s] || s);
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="text-slate-500">Carregando...</div></div>;
-
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
+      {erroSalvar && (
+        <div className="fixed top-0 left-0 right-0 bg-red-500 text-white p-3 text-center text-sm z-50 shadow-lg">
+          ⚠️ {erroSalvar}
+        </div>
+      )}
+
+      {confirmarRemocao && (
+        <div className="fixed bottom-0 left-0 right-0 bg-red-600 text-white p-4 flex items-center justify-between shadow-lg z-50">
+          <span className="text-sm font-medium">{confirmarRemocao.mensagem}</span>
+          <div className="flex gap-2 ml-4 shrink-0">
+            <button onClick={confirmarRemocaoExecutar} className="bg-white text-red-600 px-3 py-1 rounded text-sm font-medium hover:bg-red-50">Confirmar</button>
+            <button onClick={() => setConfirmarRemocao(null)} className="border border-red-400 text-white px-3 py-1 rounded text-sm hover:bg-red-700">Cancelar</button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-gradient-to-r from-slate-900 to-slate-700 text-white p-5 sticky top-0 z-10 shadow-lg">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-1">
@@ -408,7 +466,15 @@ export default function App() {
 
                   {!editando && (
                     <div className="w-full bg-slate-100 rounded-full h-2 mb-3">
-                      <div className={`h-2 rounded-full transition-all ${totalChecks === checkItems.length && checkItems.length > 0 ? 'bg-green-500' : totalChecks >= Math.ceil(checkItems.length * 0.6) ? 'bg-blue-500' : totalChecks >= 1 ? 'bg-yellow-500' : 'bg-slate-300'}`} style={{ width: `${progresso}%` }}></div>
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          totalChecks === checkItems.length && checkItems.length > 0 ? 'bg-green-500'
+                          : totalChecks >= Math.ceil(checkItems.length * LIMIAR_VERIFICADO) ? 'bg-blue-500'
+                          : totalChecks >= 1 ? 'bg-yellow-500'
+                          : 'bg-slate-300'
+                        }`}
+                        style={{ width: `${progresso}%` }}
+                      />
                     </div>
                   )}
 

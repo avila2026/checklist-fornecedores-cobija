@@ -15,16 +15,16 @@ Nenhum test runner ou linter está configurado.
 
 ## Arquitetura
 
-Este é um aplicativo React de página única. Toda a lógica da aplicação está em um único arquivo: `src/App.jsx`. Não há rotas, componentes adicionais nem biblioteca de gerenciamento de estado.
+Este é um aplicativo React de página única (PWA). Toda a lógica da aplicação está em um único arquivo: `src/App.jsx`. Não há rotas, componentes adicionais nem biblioteca de gerenciamento de estado.
 
-**Stack:** React 18 · Vite 4 · Tailwind CSS 3 · lucide-react icons
+**Stack:** React 18 · Vite 4 · Tailwind CSS 3 · lucide-react · vite-plugin-pwa
 
 ### Modelo de dados
 
 Cada fornecedor (`fornecedor`) tem a seguinte estrutura:
 ```js
 {
-  id: number,
+  id: string,           // crypto.randomUUID()
   nome: string,
   contato: string,      // telefone com código do país (+591...)
   avaliacao: string,
@@ -41,7 +41,7 @@ Cada fornecedor (`fornecedor`) tem a seguinte estrutura:
 
 ### Cálculo automático de status
 
-`calcStatus(checks)` em `App.jsx:92` deriva o status automaticamente com base nos itens marcados:
+`calcStatus(checks)` em `App.jsx` deriva o status automaticamente com base nos itens marcados. O limiar de 60% é definido pela constante `LIMIAR_VERIFICADO = 0.6` no topo do arquivo:
 - `comprou` marcado → `'aprovado'`
 - ≥ 60% dos itens marcados → `'verificado'`
 - ≥ 1 item marcado → `'em_andamento'`
@@ -49,19 +49,15 @@ Cada fornecedor (`fornecedor`) tem a seguinte estrutura:
 
 O status também pode ser definido manualmente pelo formulário de edição.
 
-### Abstração de armazenamento (`window.storage`)
+### Persistência (`localStorage`)
 
-O app utiliza uma API assíncrona `window.storage` em vez de `localStorage` diretamente. Essa API **não** é fornecida nativamente pelos navegadores — foi projetada para uma plataforma que injeta esse shim (ex.: Replit). Em um navegador padrão, os blocos `try/catch` fazem fallback para os dados iniciais, o que significa que **a persistência não funciona na produção no estado atual**.
+O app usa `localStorage` diretamente com inicialização síncrona via lazy `useState` — sem `useEffect` de carregamento. As três chaves são: `'dados'` (fornecedores), `'checks'` (itens do checklist), `'mensagem'` (template do WhatsApp).
 
-Há 7 pontos de uso em `src/App.jsx`:
-- **3 leituras** (`window.storage.get(key)`) dentro de `carregar` (o loader do `useEffect`) — retorna uma Promise resolvida em `{value: string}`; o dado real é lido via `.value`
-- **4 escritas** (`window.storage.set(key, value)`) — uma em `carregar` (seed inicial) e uma em cada uma das funções `salvar`, `salvarChecks` e `salvarMensagem`
+Gravações frequentes (notas e labels de check) são debounced em 400ms para evitar serialização do JSON a cada tecla digitada. Falhas de gravação (ex.: modo privado com quota zero) exibem um banner vermelho temporário no topo da tela.
 
-As três chaves de armazenamento são: `'dados'` (lista de fornecedores), `'checks'` (itens do checklist), `'mensagem'` (template do WhatsApp).
+## PWA
 
-Para migrar para `localStorage`, observe as diferenças de API:
-- `window.storage.get(key)` é **assíncrono** e retorna `{value: string}` — substituir por `localStorage.getItem(key)`, que é síncrono e retorna a string diretamente (remover o `await` e trocar `result.value` por `result`)
-- `window.storage.set(key, val)` é **assíncrono** — substituir por `localStorage.setItem(key, val)` (remover o `await`; a função `carregar` pode ser simplificada ou tornar-se síncrona)
+O app é uma PWA instalável configurada em `vite.config.js` via `vite-plugin-pwa`. O Service Worker (gerado pelo Workbox) faz cache de todos os assets estáticos para funcionamento offline. Os ícones ficam em `public/icon-192.png` e `public/icon-512.png`.
 
 ## Deploy
 
@@ -70,7 +66,7 @@ O app é publicado em dois destinos:
 - **GitHub Pages** – CI em `.github/workflows/deploy.yml` é acionado a cada push na branch `main`. Usa a variável de ambiente `GITHUB_PAGES=true` para que o Vite defina `base: '/checklist-fornecedores-cobija/'`.
 - **Vercel** – configurado via `vercel.json` com rewrite de fallback para SPA. Usa `base: '/'`.
 
-Para gerar o build do GitHub Pages localmente, defina a variável: `GITHUB_PAGES=true npm run build`.
+Para gerar o build do GitHub Pages localmente: `GITHUB_PAGES=true npm run build`.
 
 ## Idioma
 
