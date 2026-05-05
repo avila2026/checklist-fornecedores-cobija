@@ -1,77 +1,77 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este arquivo fornece orientações ao Claude Code (claude.ai/code) ao trabalhar com o código neste repositório.
 
-## Commands
+## Comandos
 
 ```bash
-npm install        # install dependencies
-npm run dev        # dev server at http://localhost:3000 (auto-opens browser)
-npm run build      # production build → dist/
-npm run preview    # preview the production build locally
+npm install        # instala as dependências
+npm run dev        # servidor de desenvolvimento em http://localhost:3000 (abre o navegador automaticamente)
+npm run build      # build de produção → dist/
+npm run preview    # visualiza o build de produção localmente
 ```
 
-No test runner or linter is configured.
+Nenhum test runner ou linter está configurado.
 
-## Architecture
+## Arquitetura
 
-This is a single-page React app. The entire application logic lives in one file: `src/App.jsx`. There are no routes, no additional components, and no state management library.
+Este é um aplicativo React de página única. Toda a lógica da aplicação está em um único arquivo: `src/App.jsx`. Não há rotas, componentes adicionais nem biblioteca de gerenciamento de estado.
 
 **Stack:** React 18 · Vite 4 · Tailwind CSS 3 · lucide-react icons
 
-### Data model
+### Modelo de dados
 
-Each supplier (`fornecedor`) has this shape:
+Cada fornecedor (`fornecedor`) tem a seguinte estrutura:
 ```js
 {
   id: number,
   nome: string,
-  contato: string,      // phone number with country code (+591...)
+  contato: string,      // telefone com código do país (+591...)
   avaliacao: string,
   endereco: string,
   tipo: string,
-  atacado: string,      // wholesale indicator: 'Indício forte' | 'Indício médio' | 'Baixo a médio' | 'Baixo' | 'Não confirmado'
+  atacado: string,      // indicador de atacado: 'Indício forte' | 'Indício médio' | 'Baixo a médio' | 'Baixo' | 'Não confirmado'
   prioridade: string,   // 'Alta' | 'Média' | 'Baixa'
   obs: string,
-  checks: Record<string, boolean>,  // keyed by checkItem.id
+  checks: Record<string, boolean>,  // chave: id do item de checklist
   status: string,       // 'pendente' | 'em_andamento' | 'verificado' | 'aprovado'
   notas: string
 }
 ```
 
-### Status auto-computation
+### Cálculo automático de status
 
-`calcStatus(checks)` in `App.jsx:92` derives status automatically from check completion:
-- `comprou` checked → `'aprovado'`
-- ≥ 60% of check items checked → `'verificado'`
-- ≥ 1 checked → `'em_andamento'`
-- otherwise → `'pendente'`
+`calcStatus(checks)` em `App.jsx:92` deriva o status automaticamente com base nos itens marcados:
+- `comprou` marcado → `'aprovado'`
+- ≥ 60% dos itens marcados → `'verificado'`
+- ≥ 1 item marcado → `'em_andamento'`
+- caso contrário → `'pendente'`
 
-Status can be overridden manually via the edit form.
+O status também pode ser definido manualmente pelo formulário de edição.
 
-### Storage abstraction (`window.storage`)
+### Abstração de armazenamento (`window.storage`)
 
-The app uses an async `window.storage` API instead of `localStorage` directly. This API is **not** provided by browsers natively — it was designed for a platform that injects this shim (e.g. Replit). In a standard browser environment the `try/catch` blocks fall back to initial data, meaning **persistence does not work in production as-is**.
+O app utiliza uma API assíncrona `window.storage` em vez de `localStorage` diretamente. Essa API **não** é fornecida nativamente pelos navegadores — foi projetada para uma plataforma que injeta esse shim (ex.: Replit). Em um navegador padrão, os blocos `try/catch` fazem fallback para os dados iniciais, o que significa que **a persistência não funciona na produção no estado atual**.
 
-There are 7 call sites across `src/App.jsx`:
-- **3 reads** (`window.storage.get(key)`) inside `carregar` (the `useEffect` loader) — returns a promise resolving to `{value: string}`; the actual data is read via `.value`
-- **4 writes** (`window.storage.set(key, value)`) — one in `carregar` (initial seed), and one each in `salvar`, `salvarChecks`, and `salvarMensagem`
+Há 7 pontos de uso em `src/App.jsx`:
+- **3 leituras** (`window.storage.get(key)`) dentro de `carregar` (o loader do `useEffect`) — retorna uma Promise resolvida em `{value: string}`; o dado real é lido via `.value`
+- **4 escritas** (`window.storage.set(key, value)`) — uma em `carregar` (seed inicial) e uma em cada uma das funções `salvar`, `salvarChecks` e `salvarMensagem`
 
-The three storage keys are: `'dados'` (supplier list), `'checks'` (checklist items), `'mensagem'` (WhatsApp template).
+As três chaves de armazenamento são: `'dados'` (lista de fornecedores), `'checks'` (itens do checklist), `'mensagem'` (template do WhatsApp).
 
-To migrate to `localStorage`, note the API differences:
-- `window.storage.get(key)` is **async**, returns `{value: string}` — replace with synchronous `localStorage.getItem(key)` which returns the string directly (drop the `await` and change `result.value` to just `result`)
-- `window.storage.set(key, val)` is **async** — replace with synchronous `localStorage.setItem(key, val)` (drop the `await`; the `carregar` function can then be simplified or made synchronous)
+Para migrar para `localStorage`, observe as diferenças de API:
+- `window.storage.get(key)` é **assíncrono** e retorna `{value: string}` — substituir por `localStorage.getItem(key)`, que é síncrono e retorna a string diretamente (remover o `await` e trocar `result.value` por `result`)
+- `window.storage.set(key, val)` é **assíncrono** — substituir por `localStorage.setItem(key, val)` (remover o `await`; a função `carregar` pode ser simplificada ou tornar-se síncrona)
 
-## Deployment
+## Deploy
 
-The app deploys to two targets:
+O app é publicado em dois destinos:
 
-- **GitHub Pages** – CI in `.github/workflows/deploy.yml` triggers on push to `main`. Uses `GITHUB_PAGES=true` env var so Vite sets `base: '/checklist-fornecedores-cobija/'`.
-- **Vercel** – configured via `vercel.json` with SPA rewrite fallback. Uses `base: '/'`.
+- **GitHub Pages** – CI em `.github/workflows/deploy.yml` é acionado a cada push na branch `main`. Usa a variável de ambiente `GITHUB_PAGES=true` para que o Vite defina `base: '/checklist-fornecedores-cobija/'`.
+- **Vercel** – configurado via `vercel.json` com rewrite de fallback para SPA. Usa `base: '/'`.
 
-When building for GitHub Pages locally, set the env var: `GITHUB_PAGES=true npm run build`.
+Para gerar o build do GitHub Pages localmente, defina a variável: `GITHUB_PAGES=true npm run build`.
 
-## Language
+## Idioma
 
-The codebase and UI are in Brazilian Portuguese. Variable names, function names, comments, and UI strings should remain in Portuguese.
+O código-fonte e a interface estão em português brasileiro. Nomes de variáveis, funções, comentários e textos da UI devem permanecer em português.
