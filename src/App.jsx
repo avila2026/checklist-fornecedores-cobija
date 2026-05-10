@@ -118,29 +118,25 @@ export default function App() {
   }, []);
 
   const atualizarNotas = useCallback((id, notas) => {
-    setFornecedores(prev => {
-      const novos = prev.map(f => f.id === id ? { ...f, notas } : f);
-      try { localStorage.setItem('dados', JSON.stringify(novos)); }
-      catch (e) { console.error(e); mostrarErro('Erro ao salvar notas.'); }
-      return novos;
-    });
-  }, [mostrarErro]);
+    const novos = fornecedores.map(f => f.id === id ? { ...f, notas } : f);
+    setFornecedores(novos);
+    try { localStorage.setItem('dados', JSON.stringify(novos)); }
+    catch (e) { console.error(e); mostrarErro('Erro ao salvar notas.'); }
+  }, [fornecedores, mostrarErro]);
 
   const adicionarCheck = useCallback((label) => {
     salvarChecks([...checkItems, { id: 'custom_' + crypto.randomUUID(), label }]);
   }, [checkItems, salvarChecks]);
 
   const editarCheckLabel = useCallback((id, novoLabel) => {
-    setCheckItems(prev => {
-      const novos = prev.map(c => c.id === id ? { ...c, label: novoLabel } : c);
-      clearTimeout(debounceLabel.current);
-      debounceLabel.current = setTimeout(() => {
-        try { localStorage.setItem('checks', JSON.stringify(novos)); }
-        catch (e) { console.error(e); mostrarErro('Erro ao salvar checklist.'); }
-      }, 400);
-      return novos;
-    });
-  }, [mostrarErro]);
+    const novos = checkItems.map(c => c.id === id ? { ...c, label: novoLabel } : c);
+    setCheckItems(novos);
+    clearTimeout(debounceLabel.current);
+    debounceLabel.current = setTimeout(() => {
+      try { localStorage.setItem('checks', JSON.stringify(novos)); }
+      catch (e) { console.error(e); mostrarErro('Erro ao salvar checklist.'); }
+    }, 400);
+  }, [checkItems, mostrarErro]);
 
   const removerCheck = useCallback((id) => {
     setConfirmarRemocao({ tipo: 'check', id, mensagem: 'Remover este item de verificação? Os marcadores existentes serão removidos.' });

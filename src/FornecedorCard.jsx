@@ -6,6 +6,7 @@ export default function FornecedorCard({ f, checkItems, mensagemWA, onToggleChec
   const [expandido, setExpandido] = useState(false);
   const [editando, setEditando] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [notas, setNotas] = useState(f.notas || '');
   const debounceNotas = useRef(null);
 
   const totalChecks = Object.values(f.checks || {}).filter(Boolean).length;
@@ -28,9 +29,11 @@ export default function FornecedorCard({ f, checkItems, mensagemWA, onToggleChec
     setEditForm({});
   };
 
-  const atualizarNotas = (notas) => {
+  const handleNotasChange = (e) => {
+    const valor = e.target.value;
+    setNotas(valor);
     clearTimeout(debounceNotas.current);
-    debounceNotas.current = setTimeout(() => onAtualizarNotas(f.id, notas), 400);
+    debounceNotas.current = setTimeout(() => onAtualizarNotas(f.id, valor), 400);
   };
 
   const abrirWhatsApp = () => {
@@ -161,8 +164,8 @@ export default function FornecedorCard({ f, checkItems, mensagemWA, onToggleChec
               className="w-full text-xs border border-slate-200 rounded p-2 resize-none focus:outline-none focus:border-slate-400"
               placeholder="Notas pessoais (preços cotados, marcas vistas, observações da visita...)"
               rows={2}
-              defaultValue={f.notas || ''}
-              onChange={e => atualizarNotas(e.target.value)}
+              value={notas}
+              onChange={handleNotasChange}
             />
           </>
         )}
