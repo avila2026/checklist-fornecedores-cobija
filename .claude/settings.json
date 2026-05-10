@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__pull_request_read",
+      "mcp__github__list_pull_requests",
+      "Bash(npm run lint)",
+      "Bash(npm test)",
+      "mcp__ed21e437-91ea-41b3-863e-9f72faea838d__list_deployments",
+      "mcp__ed21e437-91ea-41b3-863e-9f72faea838d__list_teams",
+      "mcp__ed21e437-91ea-41b3-863e-9f72faea838d__list_projects"
+    ]
+  }
+}
