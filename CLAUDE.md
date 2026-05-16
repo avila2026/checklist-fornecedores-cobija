@@ -9,15 +9,15 @@ npm install        # instala as dependências
 npm run dev        # servidor de desenvolvimento em http://localhost:3000 (abre o navegador automaticamente)
 npm run build      # build de produção → dist/
 npm run preview    # visualiza o build de produção localmente
+npm run lint       # ESLint (eslint-plugin-react + eslint-plugin-react-hooks)
+npm test           # Vitest — testes unitários das funções puras em src/utils.test.js
 ```
-
-Nenhum test runner ou linter está configurado.
 
 ## Arquitetura
 
-Este é um aplicativo React de página única (PWA). Toda a lógica da aplicação está em um único arquivo: `src/App.jsx`. Não há rotas, componentes adicionais nem biblioteca de gerenciamento de estado.
+Este é um aplicativo React de página única (PWA). A lógica principal está em `src/App.jsx`; funções puras ficam em `src/utils.js`; os componentes extraídos são `FornecedorCard`, `FormularioFornecedor`, `PainelMensagem` e `PainelConfig`. Não há rotas nem biblioteca de gerenciamento de estado.
 
-**Stack:** React 18 · Vite 4 · Tailwind CSS 3 · lucide-react · vite-plugin-pwa
+**Stack:** React 18 · Vite 4 · Tailwind CSS 3 · lucide-react · vite-plugin-pwa · ESLint 9 · Vitest
 
 ### Modelo de dados
 
